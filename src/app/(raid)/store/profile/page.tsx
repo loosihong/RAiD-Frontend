@@ -4,21 +4,18 @@ import * as React from 'react';
 import { Alert, Box, Button, Container, Paper, Snackbar, TextField,
   Typography } from "@mui/material";
 import { useRouter } from "next/navigation";
-import * as HttpUtil from "../../../utils/httpUtil";
-import  "../../../utils/string.extension";
-import * as UserContract from "../../../../backend/contract/admin/user";
-import * as StoreContract from "../../../../backend/contract/stock/store";
-import * as CommonContract from "../../../../backend/contract/common";
+import * as HttpUtil from "../../../../utils/httpUtil";
+import  "../../../../utils/string.extension";
+import * as StoreContract from "../../../../../backend/contract/stock/store";
+import * as CommonContract from "../../../../../backend/contract/common";
 
 export default function UserProfilePage() {
   const [pageSuccess, setPageSuccess] = React.useState("");
   const [pageError, setPageError] = React.useState("");
   const router = useRouter();
   const [isLoadingResult, setIsLoadingResult] = React.useState(true);
-  const [user, setUser] = React.useState({} as UserContract.UserApiResponseBody);
-  const [storeName, setStoreName] = React.useState("");
+  const [store, setStore] = React.useState({} as StoreContract.GetStoreApiResponseBody);
   const [storeNameError, setStoreNameError] = React.useState("");
-  const [storeDeliveryLeadDay, setStoreDeliveryLeadDay] = React.useState(1);
 
   const pageSuccessClose = () => {
     setPageSuccess("");
@@ -28,26 +25,28 @@ export default function UserProfilePage() {
     setPageError("");
   };
 
-  const fetchUser = async () => {
+  const fetchStore = async () => {
     const [responseStatus, responseBody] = await HttpUtil.GetResponseBody<
-      UserContract.UserApiResponseBody>(
-      `/users/${HttpUtil.getCookieValue("sessionId")}/current`);
+      StoreContract.GetStoreApiResponseBody>(
+      `/stores/${HttpUtil.getCookieValue("sessionId")}/current`);
 
     if(responseStatus === 200) {
-      setUser(responseBody);
+      setStore(responseBody);
       setIsLoadingResult(false);
     }
     else if(responseStatus === 401) {
 			router.push("/");
 		}
     else {
-      setPageError(responseStatus + ": Problem loading user profile. Please try again.");
+      setPageError(responseStatus + ": Problem loading store profile. Please try again.");
     }
   }
 
   const storeNameChange = async (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if(event.target.value.length <= 200) {
-      setStoreName(event.target.value);
+      let newStore = {...store};
+      newStore.name = event.target.value;
+      setStore(newStore);
       setStoreNameError("");
     }
   }
@@ -56,62 +55,60 @@ export default function UserProfilePage() {
     const [leadDayIsValid, leadDayValue] = String.tryGetInteger(event.target.value);
 
     if(leadDayIsValid && leadDayValue >= 0 && leadDayValue <= 100) {
-      setStoreDeliveryLeadDay(leadDayValue);
+      let newStore = {...store};
+      newStore.deliveryLeadDay = leadDayValue;
+      setStore(newStore);
     }  
   }
 
-  const createStoreClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const saveStoreClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     // Validate
-    if(storeName.length === 0) {
+    if(store.name.length === 0) {
       setStoreNameError("This is required.");
     }
 
-    if(storeName.length === 0) {
+    if(store.name.length === 0) {
       setPageError("Please correct the errors before saving.");
       return;
     }
 
     // Save
-    const [responseStatus, responseBody] = await HttpUtil.PostResponseBody<
+    const [responseStatus, responseBody] = await HttpUtil.PutResponseBody<
       StoreContract.SaveStoreApiRequestBody,
       CommonContract.SaveRecordApiResponseBody>(
         `/stores`,
         new StoreContract.SaveStoreApiRequestBody(
-          storeName,
-          storeDeliveryLeadDay,
-          0
+          store.name,
+          store.deliveryLeadDay,
+          store.versionNumber
         ));
 
     if(responseStatus === 200) {
-      setPageSuccess("Your store is successfully created! Please reload the page to view your store at the top bar.");
+      setPageSuccess("Your store is successfully saved!");
+      setIsLoadingResult(true);
+      fetchStore();
     }
     else if(responseStatus === 401) {
       router.push("/");
     }
     else {
-      setPageError(responseStatus + ": There is a problem creating your new store. Please reload the page and try again.");
+      setPageError(responseStatus + ": There is a problem saving your store. Please reload the page and try again.");
     }
   }
 
   React.useEffect(() => {
-    fetchUser();
+    fetchStore();
   }, []);
 
   return (
     <Container maxWidth="lg">
       <Box sx={{my: 4, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}}>
-        <Typography variant="h4">
-          User Profile
-        </Typography>
-        { !isLoadingResult && user.loginName !== "" && user.storeId === null &&
+        { !isLoadingResult &&
           <Paper sx={{display: 'flex', flexDirection: 'column', gap: 4, p: 4, width: '100%'}}>
-            <Typography variant="h5">
-              Create a Store
-            </Typography>
             <TextField
               variant="outlined"
               label="Store Name"
-              value={storeName}
+              value={store.name}
               size="small"
               error={storeNameError !== ""}
               helperText={storeNameError}
@@ -120,15 +117,15 @@ export default function UserProfilePage() {
               variant="outlined"
               type="number"
               label="Delivery Lead Day"
-              value={storeDeliveryLeadDay}
+              value={store.deliveryLeadDay}
               size="small"
               sx={{width: 240}}
               onChange={storeDeliveryLeadDayChange} />
             <Button
               variant="contained"
               sx={{width: 'fit-content'}}
-              onClick={createStoreClick}>
-              Create Store
+              onClick={saveStoreClick}>
+              Save Store
             </Button>
           </Paper>
         }

@@ -120,7 +120,7 @@ export default function PurchasesActivePage() {
                         ${item.unitPrice.toFixed(2)} {item.unitOfMeasureShortName !== "" ? "/" + item.unitOfMeasureShortName : ""}
                       </Typography>
                       <Typography variant="body2">
-                        Bought {item.quantity}
+                        Bought {item.quantity} {item.unitOfMeasureShortName}
                       </Typography>
                     </Box>
                     <Box sx={{display: 'flex', flexDirection: 'column', gap: 2, flex: 1, justifyContent: 'space-evenly', p: 4,}}>

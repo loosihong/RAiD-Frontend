@@ -5,6 +5,10 @@ export enum QueryOrder {
     Desc = "desc"
 }
 
+export const getCookieValue = (cookieName: string): string => {
+	return getCookie(cookieName)?.toString() || "";
+}
+
 export const GetResponseBody = async <T>(relativePath: string): Promise<[number, T]> => {
 	let responseStatus: number = -1;
 	let responseBody: T = {} as T;

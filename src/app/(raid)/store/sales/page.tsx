@@ -194,7 +194,7 @@ export default function StorePurchasesPage() {
                               ${purchaseItem.unitPrice.toFixed(2)} {purchaseItem.unitOfMeasureShortName !== "" ? "/" + purchaseItem.unitOfMeasureShortName : ""}
                             </Typography>
                             <Typography variant="body2">
-                              Bought {purchaseItem.quantity}
+                              Bought {purchaseItem.quantity} {purchaseItem.unitOfMeasureShortName}
                             </Typography>
                           </Box>
                           <Box sx={{display: 'flex', flex: 1}}>

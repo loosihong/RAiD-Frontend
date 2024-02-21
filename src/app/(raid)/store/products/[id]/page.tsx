@@ -1,17 +1,13 @@
 "use client";
 
 import * as React from 'react';
-import { Alert, Box, Button, Card, CardMedia, Container, FormControl, FormHelperText, InputLabel, MenuItem, Pagination, Paper,
-  Select, SelectChangeEvent, Snackbar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Typography } from "@mui/material";
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { deDE } from '@mui/x-date-pickers/locales';
-import dayjs from 'dayjs';
+import { Alert, Box, Button, Card, CardMedia, Container, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
+  FormHelperText, InputLabel, MenuItem, Pagination, Paper, Select, SelectChangeEvent, Snackbar, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useParams, useRouter } from "next/navigation";
 import * as HttpUtil from "../../../../../utils/httpUtil";
 import  "../../../../../utils/string.extension";
+import  "../../../../../utils/date.extension";
 import * as ProductContract from "../../../../../../backend/contract/stock/product";
 import * as ProductBatchContract from "../../../../../../backend/contract/stock/productBatch";
 import * as CommonContract from "../../../../../../backend/contract/common";
@@ -36,6 +32,9 @@ export default function StoreProductPage() {
   const [pageNumber, setPageNumber] = React.useState(1);
   const [pageCount, setPageCount] = React.useState(1);
   const queryPageSize: number = 10;
+  const [openProductBatchDialog, setOpenProductBatchDialog] = React.useState(false);
+  const theme = useTheme();
+  const productBatchDialogFullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   const pageSuccessClose = () => {
     setPageSuccess("");
@@ -119,8 +118,6 @@ export default function StoreProductPage() {
   }
 
   const nameChange = async (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    console.log(event.target.value.length + ":" + event.target.value);
-
     if(event.target.value.length <= 200) {
       let newProduct: ProductContract.GetStoreProductApiResponseBody = {...product};
       newProduct.name = event.target.value;
@@ -264,8 +261,8 @@ export default function StoreProductPage() {
       "",
       0,
       0,
-      new Date().toISOString(),
-      new Date().toISOString(),
+      new Date().toStringInDate(),
+      new Date().toStringInDate(),
       0
     ));
   }
@@ -278,16 +275,24 @@ export default function StoreProductPage() {
     }
   }
 
-  const arrivedOnChange = (date: Date | null) => {
-    let newProductBatch = {...productBatch};
-    newProductBatch.arrivedOn = date?.toISOString() || new Date().toISOString();
-    setProductBatch(newProductBatch);
+  const arrivedOnChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const [arrivedOnIsValid, arrivedOnValue] = String.tryGetDate(event.target.value);
+
+    if(arrivedOnIsValid) {
+      let newProductBatch = {...productBatch};
+      newProductBatch.arrivedOn = arrivedOnValue.toStringInDate();
+      setProductBatch(newProductBatch);
+    }
   }
 
-  const expiredDateChange = (date: Date | null) => {
-    let newProductBatch = {...productBatch};
-    newProductBatch.expiredDate = date?.toISOString() || new Date().toISOString();
-    setProductBatch(newProductBatch);
+  const expiredDateChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const [expiredDateIsValid, expiredDateValue] = String.tryGetDate(event.target.value);
+
+    if(expiredDateIsValid) {
+      let newProductBatch = {...productBatch};
+      newProductBatch.expiredDate = expiredDateValue.toStringInDate();
+      setProductBatch(newProductBatch);
+    }
   }
 
   const quantityTotalChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,9 +315,10 @@ export default function StoreProductPage() {
     }
   }
 
-  const addProductBatchButtonClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const saveProductBatchButtonClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     // Save
-    const [responseStatus, responseBody] = await HttpUtil.PostResponseBody<
+    const [responseStatus, responseBody] = (product.id === 0 ?
+      await HttpUtil.PostResponseBody<
         ProductBatchContract.SaveProductBatchApiRequestBody,
         CommonContract.SaveRecordApiResponseBody>(
         `/products/product-batches`,
@@ -325,10 +331,25 @@ export default function StoreProductPage() {
           productBatch.arrivedOn,
           productBatch.expiredDate,
           0
-        ));
+      )) :
+      await HttpUtil.PutResponseBody<
+        ProductBatchContract.SaveProductBatchApiRequestBody,
+        CommonContract.SaveRecordApiResponseBody>(
+        `/products/product-batches`,
+        new ProductBatchContract.SaveProductBatchApiRequestBody(
+          productBatch.id,
+          productBatch.productId,
+          productBatch.batchNumber,
+          productBatch.quantityTotal,
+          productBatch.quantityLeft,
+          productBatch.arrivedOn,
+          productBatch.expiredDate,
+          productBatch.versionNumber
+      ))
+    );
         
     if(responseStatus === 200) {
-      setPageSuccess("The batch is successfully added!");
+      setPageSuccess("The batch is successfully saved!");
       const [productBatchesResponseStatus, productBatchesResponseBody] = await HttpUtil.GetResponseBody<
         ProductBatchContract.GetProductBatchApiResponseBody>(
         `/products/${product.id}/product-batches?sort=${sort}&order=${order}&offset=0&fetch=${queryPageSize}`);
@@ -344,6 +365,8 @@ export default function StoreProductPage() {
       else {
         setPageError(responseStatus + ": Problem loading product batches. Please try again.");
       }
+
+      setOpenProductBatchDialog(false);
     }
     else if(responseStatus === 401) {
       router.push("/");
@@ -352,6 +375,25 @@ export default function StoreProductPage() {
       setPageError(responseStatus + ": There is a problem updating the batch. Please reload the page and try again.");
     }
   }
+
+  const productBatchDialogOpen = (index: number) => {
+    if(index >= 0 && index < productBatches.length) {
+      const curProductBatch = {...productBatches[index]}
+      curProductBatch.arrivedOn = curProductBatch.arrivedOn.slice(0, 10);
+      curProductBatch.expiredDate = curProductBatch.expiredDate?.slice(0, 10) || "";
+      setProductBatch(curProductBatch);
+    }
+    else {
+      initializeNewProductBatch(product.id);
+    }
+
+    setOpenProductBatchDialog(true);
+  };
+
+  const productBatchDialogClose = () => {
+    initializeNewProductBatch(product.id);
+    setOpenProductBatchDialog(false);
+  };
   
   React.useEffect(() => {
     fetchProduct(sort, order, 1);
@@ -363,7 +405,7 @@ export default function StoreProductPage() {
         { !isLoadingResult &&          
           <Box sx={{display: 'flex', flexWrap: 'wrap', width: '100%'}}>
             <Box sx={{display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, mt:8, width: '100%'}}>
-              <Card sx={{ width: 400 }}>
+              <Card sx={{display: 'flex', alignItems: 'center', width: 400 }}>
                 <CardMedia
                   component="img"
                   height="400"
@@ -374,7 +416,7 @@ export default function StoreProductPage() {
                   <Typography variant="h4" sx={{flex: 1, minWidth: 200}}>
                     {product.id === 0 ? "New Product": "Edit Product"}
                   </Typography>
-                  <Box sx={{display: 'flex', gap: 4, minWidth: 300}}>
+                  <Box sx={{display: 'flex', gap: 4, justifyContent: 'right', minWidth: 300}}>
                     <Button variant="outlined" onClick={backButtonClick}>Back</Button>
                     { product.id !== 0 &&
                       <Button variant="outlined" onClick={deleteButtonClick}>Delete</Button>
@@ -437,42 +479,84 @@ export default function StoreProductPage() {
             </Box>
             { product.id !== 0 &&
               <Box sx={{display: 'flex', flexDirection: 'column', gap: 4, mt: 8, minWidth: 400, width: '100%'}}>
-                <Typography variant="h5" sx={{flex: 1, minWidth: 200}}>
-                  Product Batches
-                </Typography>
-                <Paper sx={{display: 'flex', flexDirection: 'column', gap: 4}}>
-                  <TextField
-                    variant="outlined"
-                    label="Batch Number"
-                    value={productBatch.batchNumber}
-                    size="small"
-                    onChange={batchNumberChange} />
-                  <TextField
-                    type="number"
-                    variant="outlined"
-                    label="Total Quantity"
-                    value={productBatch.quantityTotal}
-                    size="small"
-                    onChange={quantityTotalChange} />
-                  <TextField
-                    type="number"
-                    variant="outlined"
-                    label="Quantity Left"
-                    value={productBatch.quantityLeft}
-                    size="small"
-                    onChange={quantityLeftChange} />
-                  {/* <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DatePicker
-                      label="Arrived On"
-                      value={new Date(productBatch.arrivedOn)}
-                      onChange={arrivedOnChange} />
-                    <DatePicker
-                      label="Expired On"
-                      value={new Date(productBatch.expiredDate || new Date())}
-                      onChange={expiredDateChange} />
-                  </LocalizationProvider> */}
-                  <Button variant="contained" onClick={addProductBatchButtonClick}>Add a Product Batch</Button>
-                </Paper>
+                <Box sx={{display: 'flex'}}>
+                  <Typography variant="h5" sx={{flex: 1, minWidth: 200}}>
+                    Product Batches
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    sx={{width: 'fit-content'}}
+                    onClick={() => productBatchDialogOpen(-1)}>
+                    Add a Product Batch
+                  </Button>
+                </Box>
+                <Dialog
+                  fullScreen={productBatchDialogFullScreen}
+                  open={openProductBatchDialog}
+                  sx={{minWidth: 400}}
+                  onClose={productBatchDialogClose}>
+                  <DialogTitle>
+                    {productBatch.id === 0 ? "New Product Batch" : "Edit Product Batch"}
+                  </DialogTitle>
+                  <DialogContent>
+                    <Box sx={{display: 'flex', flexWrap: 'wrap', gap: 4, mt: 4}}>
+                      <Box sx={{display: 'flex', flexDirection: 'column', flex: 1, gap: 4}}>
+                        <TextField
+                          variant="outlined"
+                          label="Batch Number"
+                          value={productBatch.batchNumber}
+                          size="small"
+                          onChange={batchNumberChange} />
+                        <TextField
+                          type="date"
+                          variant="outlined"
+                          label="Arrived On"
+                          value={productBatch.arrivedOn}
+                          sx={{width: 240}}
+                          size="small"
+                          onChange={arrivedOnChange} />
+                        <TextField
+                          type="date"
+                          variant="outlined"
+                          label="Expired On"
+                          value={productBatch.expiredDate}
+                          sx={{width: 240}}
+                          size="small"
+                          onChange={expiredDateChange} />                      
+                      </Box>
+                      <Box sx={{display: 'flex', flexDirection: 'column', flex: 1, gap: 4}}>
+                        <TextField
+                          type="number"
+                          variant="outlined"
+                          label="Total Quantity"
+                          value={productBatch.quantityTotal}
+                          size="small"
+                          sx={{width: 240}}
+                          onChange={quantityTotalChange} />
+                        <TextField
+                          type="number"
+                          variant="outlined"
+                          label="Quantity Left"
+                          value={productBatch.quantityLeft}
+                          size="small"
+                          sx={{width: 240}}
+                          onChange={quantityLeftChange} />
+                      </Box>
+                    </Box>  
+                  </DialogContent>
+                  <DialogActions>
+                    <Button
+                      variant="outlined"
+                      onClick={productBatchDialogClose}>
+                      Close
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={saveProductBatchButtonClick}>
+                      {productBatch.id === 0 ? "Add" : "Update"}
+                    </Button>
+                  </DialogActions>
+                </Dialog>
                 { !isLoadingResult && productBatches.length > 0 &&
                   <Box>
                     <TableContainer component={Paper}>
@@ -487,13 +571,13 @@ export default function StoreProductPage() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          { productBatches.map((row) => (
+                          { productBatches.map((row, index) => (
                             <TableRow key={row.id}>
-                              <TableCell>{row.batchNumber}</TableCell>
-                              <TableCell>{row.arrivedOn.slice(0, 10)}</TableCell>
-                              <TableCell>{row.expiredDate?.slice(0, 10) || ""}</TableCell>
-                              <TableCell align="right">{row.quantityTotal}</TableCell>
-                              <TableCell align="right">{row.quantityLeft}</TableCell>
+                              <TableCell onClick={() => productBatchDialogOpen(index)}>{row.batchNumber}</TableCell>
+                              <TableCell onClick={() => productBatchDialogOpen(index)}>{row.arrivedOn.slice(0, 10)}</TableCell>
+                              <TableCell onClick={() => productBatchDialogOpen(index)}>{row.expiredDate?.slice(0, 10) || ""}</TableCell>
+                              <TableCell align="right" onClick={() => productBatchDialogOpen(index)}>{row.quantityTotal}</TableCell>
+                              <TableCell align="right" onClick={() => productBatchDialogOpen(index)}>{row.quantityLeft}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
