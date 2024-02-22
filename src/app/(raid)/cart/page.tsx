@@ -8,7 +8,7 @@ import * as HttpUtil from "../../../utils/httpUtil";
 import  "../../../utils/string.extension";
 import * as CartItemContract from "../../../../backend/contract/customer/cartItem";
 import * as PurchaseContract from "../../../../backend/contract/customer/purchase";
-import * as CommonContract from "../../../../../backend/contract/common";
+import * as CommonContract from "../../../../backend/contract/common";
 
 export default function CartItemsPage() {
   const [pageError, setPageError] = React.useState("");
