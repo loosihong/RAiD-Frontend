@@ -317,7 +317,7 @@ export default function StoreProductPage() {
 
   const saveProductBatchButtonClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     // Save
-    const [responseStatus, responseBody] = (product.id === 0 ?
+    const [responseStatus, responseBody] = (productBatch.id === 0 ?
       await HttpUtil.PostResponseBody<
         ProductBatchContract.SaveProductBatchApiRequestBody,
         CommonContract.SaveRecordApiResponseBody>(
